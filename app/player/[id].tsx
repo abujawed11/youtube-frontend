@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../../src/contexts/AppContext';
 import { useYouTube } from '../../src/hooks/useYouTube';
-import NativeVideoPlayer from '../../src/components/video/NativeVideoPlayer';
+import AdvancedVideoPlayer from '../../src/components/video/AdvancedVideoPlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 import ErrorMessage from '../../src/components/common/ErrorMessage';
@@ -169,7 +169,7 @@ export default function PlayerScreen() {
       )}
 
       <ScrollView className="flex-1" bounces={false}>
-        <NativeVideoPlayer
+        <AdvancedVideoPlayer
           uri={videoUri}
           title={!isFullscreen ? currentVideo.title : undefined}
           onFullscreenUpdate={setIsFullscreen}

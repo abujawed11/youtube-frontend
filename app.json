@@ -26,7 +26,7 @@
     },
     "plugins": [
       "expo-router",
-      "expo-dev-client",
+      "expo-dev-client", 
       [
         "expo-splash-screen",
         {
@@ -36,7 +36,10 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "react-native-orientation-locker",
+      "react-native-keep-awake",
+      "@react-native-community/netinfo"
     ],
     "experiments": {
       "typedRoutes": true
