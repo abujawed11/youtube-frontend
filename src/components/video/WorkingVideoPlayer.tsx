@@ -8,19 +8,8 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  Alert,
 } from 'react-native';
-// Try to import Expo Video, fallback if not available
-let VideoView: any, useVideoPlayer: any, VideoSource: any;
-try {
-  const expoVideo = require('expo-video');
-  VideoView = expoVideo.VideoView;
-  useVideoPlayer = expoVideo.useVideoPlayer;
-  VideoSource = expoVideo.VideoSource;
-} catch (error) {
-  console.warn('Expo Video not available:', error);
-  // Will be handled in component
-}
+import { Video, AVPlaybackStatus, ResizeMode } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import LinearGradient from 'react-native-linear-gradient';
@@ -38,39 +27,38 @@ interface VideoQuality {
   uri: string;
   label: string;
   resolution: string;
-  bitrate?: number;
 }
 
-interface ExpoVideoPlayerProps {
+interface WorkingVideoPlayerProps {
   sources: VideoQuality[];
   title?: string;
   onFullscreenUpdate?: (status: boolean) => void;
   onProgress?: (currentTime: number, totalTime: number) => void;
-  poster?: string;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
-const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
+const WorkingVideoPlayer: React.FC<WorkingVideoPlayerProps> = ({
   sources,
   title,
   onFullscreenUpdate,
   onProgress: onProgressCallback,
-  poster,
 }) => {
   // Keep screen awake during playback
   useKeepAwake();
 
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const progressUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const videoRef = useRef<Video>(null);
+  const controlsTimeoutRef = useRef<number | null>(null);
+  const seekTimeoutRef = useRef<number | null>(null);
+  const progressUpdateTimeoutRef = useRef<number | null>(null);
 
   // Animated values
   const controlsOpacity = useSharedValue(1);
   const loadingOpacity = useSharedValue(1);
 
   // Player state
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,54 +88,38 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     return sources[selectedQualityIndex] || sources[0];
   }, [sources, selectedQualityIndex]);
 
-  // Check if Expo Video is available
-  if (!VideoView || !useVideoPlayer) {
-    return (
-      <View className="bg-black justify-center items-center" style={{ 
-        width: SCREEN_WIDTH, 
-        height: isFullscreen ? SCREEN_HEIGHT : SCREEN_WIDTH * (9/16) 
-      }}>
-        <Ionicons name="alert-circle" size={48} color="#FF6B6B" />
-        <Text className="text-white text-center mt-4 px-6 text-base">
-          Expo Video not available. Please restart your app or rebuild the project.
-        </Text>
-        <Text className="text-gray-400 text-center mt-2 px-6 text-sm">
-          Try running: npx expo prebuild --clean
-        </Text>
-      </View>
-    );
-  }
-
-  // Expo Video player setup
-  const videoSource = useMemo(() => ({
-    uri: currentSource.uri,
-    metadata: {
-      title: title || 'Video',
-      artist: currentSource.label,
-    },
-  }), [currentSource.uri, title, currentSource.label]);
-
-  const player = useVideoPlayer(videoSource, (player) => {
-    player.loop = false;
-    player.muted = isMuted;
-    player.volume = volume;
-    player.playbackRate = playbackSpeed;
-    player.timeUpdateEventInterval = 250; // Update every 250ms for smooth progress
-  });
+  // Calculate video container dimensions
+  const videoContainerStyle = useMemo(() => {
+    if (isFullscreen) {
+      return {
+        width: SCREEN_HEIGHT, // Use height as width in landscape
+        height: SCREEN_WIDTH, // Use width as height in landscape
+      };
+    } else {
+      return {
+        width: SCREEN_WIDTH,
+        height: SCREEN_WIDTH * (9/16), // 16:9 aspect ratio
+      };
+    }
+  }, [isFullscreen]);
 
   // Screen orientation handling
   useEffect(() => {
     const setupOrientation = async () => {
-      if (isFullscreen) {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
-        if (Platform.OS === 'android') {
-          StatusBar.setHidden(true, 'fade');
+      try {
+        if (isFullscreen) {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+          if (Platform.OS === 'android') {
+            StatusBar.setHidden(true, 'fade');
+          }
+        } else {
+          await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+          if (Platform.OS === 'android') {
+            StatusBar.setHidden(false, 'fade');
+          }
         }
-      } else {
-        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
-        if (Platform.OS === 'android') {
-          StatusBar.setHidden(false, 'fade');
-        }
+      } catch (error) {
+        console.error('Orientation setup failed:', error);
       }
     };
 
@@ -177,74 +149,6 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     return unsubscribe;
   }, [error]);
 
-  // Player event listeners
-  useEffect(() => {
-    const loadingListener = player.addListener('statusChange', (status, oldStatus, error) => {
-      if (error) {
-        console.error('Video error:', error);
-        setError('Failed to load video. Please check your connection.');
-        setIsLoading(false);
-        setIsBuffering(false);
-        showControlsAnimated();
-        return;
-      }
-
-      switch (status) {
-        case 'loading':
-          setIsLoading(true);
-          setIsBuffering(false);
-          setError(null);
-          loadingOpacity.value = withTiming(1, { duration: 200 });
-          break;
-        case 'readyToPlay':
-          setIsLoading(false);
-          setIsBuffering(false);
-          setError(null);
-          setDuration(player.duration);
-          loadingOpacity.value = withTiming(0, { duration: 300 });
-          break;
-        case 'error':
-          setIsLoading(false);
-          setIsBuffering(false);
-          setError('Video playback error. Please try again.');
-          showControlsAnimated();
-          break;
-      }
-    });
-
-    const timeUpdateListener = player.addListener('timeUpdate', ({ currentTime, bufferedPosition }) => {
-      if (!isSeeking) {
-        // Throttle progress updates to prevent UI jank
-        if (progressUpdateTimeoutRef.current) {
-          clearTimeout(progressUpdateTimeoutRef.current);
-        }
-        
-        progressUpdateTimeoutRef.current = setTimeout(() => {
-          setCurrentTime(currentTime);
-          onProgressCallback?.(currentTime, duration);
-        }, 100);
-      }
-    });
-
-    const playingChangeListener = player.addListener('playingChange', (isPlaying, oldIsPlaying) => {
-      // Handle buffering state
-      if (player.status === 'readyToPlay' && !isPlaying && oldIsPlaying) {
-        // Could be buffering
-        setTimeout(() => {
-          if (player.status === 'readyToPlay' && !player.playing) {
-            setIsBuffering(false);
-          }
-        }, 1000);
-      }
-    });
-
-    return () => {
-      loadingListener.remove();
-      timeUpdateListener.remove();
-      playingChangeListener.remove();
-    };
-  }, [player, isSeeking, duration, onProgressCallback, loadingOpacity, showControlsAnimated]);
-
   // Auto-hide controls with smooth animation
   const hideControlsAnimated = useCallback(() => {
     controlsOpacity.value = withTiming(0, { duration: 300 }, (finished) => {
@@ -265,7 +169,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
       clearTimeout(controlsTimeoutRef.current);
     }
 
-    if (showControls && player.playing && !isSeeking && !showSpeedMenu && !showQualityMenu && !showVolumeSlider) {
+    if (showControls && isPlaying && !isSeeking && !showSpeedMenu && !showQualityMenu && !showVolumeSlider) {
       controlsTimeoutRef.current = setTimeout(() => {
         hideControlsAnimated();
       }, 4000);
@@ -276,34 +180,89 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
         clearTimeout(controlsTimeoutRef.current);
       }
     };
-  }, [showControls, player.playing, isSeeking, showSpeedMenu, showQualityMenu, showVolumeSlider, hideControlsAnimated]);
+  }, [showControls, isPlaying, isSeeking, showSpeedMenu, showQualityMenu, showVolumeSlider, hideControlsAnimated]);
+
+  // Video event handlers
+  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (status.isLoaded) {
+      setIsLoading(false);
+      setError(null);
+      loadingOpacity.value = withTiming(0, { duration: 300 });
+
+      // Handle buffering
+      setIsBuffering(status.isBuffering || false);
+
+      // Update duration
+      if (status.durationMillis && status.durationMillis !== duration) {
+        setDuration(status.durationMillis / 1000); // Convert to seconds
+      }
+
+      // Update playing state
+      const playing = status.isPlaying || false;
+      if (playing !== isPlaying) {
+        setIsPlaying(playing);
+      }
+
+      // Update current time (throttled for smooth performance)
+      if (!isSeeking && status.positionMillis !== undefined) {
+        if (progressUpdateTimeoutRef.current) {
+          clearTimeout(progressUpdateTimeoutRef.current);
+        }
+        
+        progressUpdateTimeoutRef.current = setTimeout(() => {
+          const currentTimeSeconds = status.positionMillis! / 1000;
+          setCurrentTime(currentTimeSeconds);
+          onProgressCallback?.(currentTimeSeconds, duration);
+        }, 100);
+      }
+
+      // Update volume and rate
+      setVolume(status.volume || 1.0);
+      setIsMuted(status.isMuted || false);
+    } else if (status.error) {
+      console.error('Video error:', status.error);
+      setIsLoading(false);
+      setIsBuffering(false);
+      showControlsAnimated();
+      setError('Failed to load video. Please check your connection and try again.');
+    }
+  }, [isSeeking, duration, onProgressCallback, isPlaying, loadingOpacity, showControlsAnimated]);
 
   // Playback controls
-  const togglePlayPause = useCallback(() => {
-    if (player.playing) {
-      player.pause();
-    } else {
-      player.play();
+  const togglePlayPause = useCallback(async () => {
+    try {
+      if (isPlaying) {
+        await videoRef.current?.pauseAsync();
+      } else {
+        await videoRef.current?.playAsync();
+      }
+      showControlsAnimated();
+    } catch (error) {
+      console.error('Playback control failed:', error);
     }
-    showControlsAnimated();
-  }, [player, showControlsAnimated]);
+  }, [isPlaying, showControlsAnimated]);
 
-  const toggleMute = useCallback(() => {
-    const newMutedState = !isMuted;
-    setIsMuted(newMutedState);
-    player.muted = newMutedState;
-    showControlsAnimated();
-  }, [isMuted, player, showControlsAnimated]);
+  const toggleMute = useCallback(async () => {
+    try {
+      await videoRef.current?.setIsMutedAsync(!isMuted);
+      showControlsAnimated();
+    } catch (error) {
+      console.error('Mute control failed:', error);
+    }
+  }, [isMuted, showControlsAnimated]);
 
-  const setVolumeControl = useCallback((newVolume: number) => {
-    setVolume(newVolume);
-    player.volume = newVolume;
-    showControlsAnimated();
-  }, [player, showControlsAnimated]);
+  const setVolumeControl = useCallback(async (newVolume: number) => {
+    try {
+      await videoRef.current?.setVolumeAsync(newVolume);
+      showControlsAnimated();
+    } catch (error) {
+      console.error('Volume control failed:', error);
+    }
+  }, [showControlsAnimated]);
 
   // Smart seeking with debouncing
-  const seekTo = useCallback((time: number) => {
-    const clampedTime = Math.max(0, Math.min(time, duration));
+  const seekTo = useCallback(async (timeSeconds: number) => {
+    const clampedTime = Math.max(0, Math.min(timeSeconds, duration));
     setSeekTime(clampedTime);
 
     // Clear previous seek timeout
@@ -312,12 +271,16 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     }
 
     // Debounced seek - only seek after user stops sliding
-    seekTimeoutRef.current = setTimeout(() => {
-      player.currentTime = clampedTime;
-      setCurrentTime(clampedTime);
-      setIsSeeking(false);
+    seekTimeoutRef.current = setTimeout(async () => {
+      try {
+        await videoRef.current?.setPositionAsync(clampedTime * 1000); // Convert to milliseconds
+        setCurrentTime(clampedTime);
+        setIsSeeking(false);
+      } catch (error) {
+        console.error('Seek failed:', error);
+      }
     }, 150);
-  }, [duration, player]);
+  }, [duration]);
 
   const handleSliderStart = useCallback(() => {
     setIsSeeking(true);
@@ -354,44 +317,39 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     showControlsAnimated();
   }, [isFullscreen, onFullscreenUpdate, showControlsAnimated]);
 
-  const changeQuality = useCallback((index: number) => {
+  const changeQuality = useCallback(async (index: number) => {
     const currentPosition = isSeeking ? seekTime : currentTime;
-    const wasPlaying = player.playing;
+    const wasPlaying = isPlaying;
     
     setSelectedQualityIndex(index);
     setShowQualityMenu(false);
     setIsLoading(true);
     loadingOpacity.value = withTiming(1, { duration: 200 });
     
-    // The player will automatically update with the new source due to the useMemo dependency
+    // The video will reload with new source
     // Resume from current position after quality change
-    setTimeout(() => {
-      player.currentTime = currentPosition;
-      if (wasPlaying) {
-        player.play();
+    setTimeout(async () => {
+      try {
+        await videoRef.current?.setPositionAsync(currentPosition * 1000);
+        if (wasPlaying) {
+          await videoRef.current?.playAsync();
+        }
+      } catch (error) {
+        console.error('Failed to resume after quality change:', error);
       }
-    }, 500);
-  }, [currentTime, seekTime, isSeeking, player, loadingOpacity]);
+    }, 1000);
+  }, [currentTime, seekTime, isSeeking, isPlaying, loadingOpacity]);
 
-  const changePlaybackSpeed = useCallback((speed: number) => {
-    setPlaybackSpeed(speed);
-    player.playbackRate = speed;
-    setShowSpeedMenu(false);
-    showControlsAnimated();
-  }, [player, showControlsAnimated]);
-
-  // Format time helper
-  const formatTime = useCallback((seconds: number) => {
-    if (!isFinite(seconds)) return '0:00';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = Math.floor(seconds % 60);
-    
-    if (h > 0) {
-      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const changePlaybackSpeed = useCallback(async (speed: number) => {
+    try {
+      await videoRef.current?.setRateAsync(speed, true);
+      setPlaybackSpeed(speed);
+      setShowSpeedMenu(false);
+      showControlsAnimated();
+    } catch (error) {
+      console.error('Playback speed change failed:', error);
     }
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }, []);
+  }, [showControlsAnimated]);
 
   // Simple tap handler
   const handleTap = useCallback(() => {
@@ -401,6 +359,18 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
       showControlsAnimated();
     }
   }, [showControls, hideControlsAnimated, showControlsAnimated]);
+
+  // Format time helper
+  const formatTime = useCallback((seconds: number) => {
+    if (!isFinite(seconds)) return '0:00';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    
+    if (h > 0) {
+      return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`};
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }, []);
 
   // Animated styles
   const controlsAnimatedStyle = useAnimatedStyle(() => ({
@@ -429,10 +399,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
   // Error state
   if (error && !isLoading) {
     return (
-      <View className="bg-black justify-center items-center" style={{ 
-        width: SCREEN_WIDTH, 
-        height: isFullscreen ? SCREEN_HEIGHT : SCREEN_WIDTH * (9/16) 
-      }}>
+      <View className="bg-black justify-center items-center" style={videoContainerStyle}>
         <Ionicons name="alert-circle" size={48} color="#FF6B6B" />
         <Text className="text-white text-center mt-4 px-6 text-base">{error}</Text>
         <Text className="text-gray-400 text-center mt-2 px-6 text-sm">
@@ -443,7 +410,6 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
             setError(null);
             setIsLoading(true);
             loadingOpacity.value = withTiming(1, { duration: 200 });
-            player.replay();
           }}
           className="mt-4 bg-red-600 px-6 py-3 rounded-lg"
           activeOpacity={0.8}
@@ -458,8 +424,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     <View className="bg-black relative" style={{ width: '100%' }}>
       {/* Video Container */}
       <View style={{
-        width: SCREEN_WIDTH,
-        height: isFullscreen ? SCREEN_HEIGHT : SCREEN_WIDTH * (9/16),
+        ...videoContainerStyle,
         position: 'relative',
       }}>
         {/* Video Component */}
@@ -468,13 +433,18 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
           activeOpacity={1}
           onPress={handleTap}
         >
-          <VideoView
+          <Video
+            ref={videoRef}
+            source={{ uri: currentSource.uri }}
             style={{ flex: 1 }}
-            player={player}
-            allowsFullscreen={false}
-            allowsPictureInPicture={false}
-            contentFit={isFullscreen ? 'contain' : 'contain'}
-            nativeControls={false}
+            resizeMode={ResizeMode.CONTAIN}
+            shouldPlay={false}
+            isLooping={false}
+            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+            useNativeControls={false}
+            volume={volume}
+            isMuted={isMuted}
+            rate={playbackSpeed}
           />
         </TouchableOpacity>
 
@@ -535,10 +505,10 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 mr-4">
                     <Text className="text-white text-xl font-bold" numberOfLines={1}>
-                      {title || 'Video Player'}
+                      {title || 'Professional Video Player'}
                     </Text>
                     <Text className="text-gray-300 text-sm mt-1">
-                      {currentSource.label} • {playbackSpeed}x • {networkType}
+                      {currentSource.label} • {playbackSpeed}x • {networkType} • EXPO-AV
                     </Text>
                   </View>
                   
@@ -582,10 +552,10 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
                     style={{ elevation: 8 }}
                   >
                     <Ionicons
-                      name={player.playing ? "pause" : "play"}
+                      name={isPlaying ? "pause" : "play"}
                       size={48}
                       color="#fff"
-                      style={{ marginLeft: player.playing ? 0 : 6 }}
+                      style={{ marginLeft: isPlaying ? 0 : 6 }}
                     />
                   </TouchableOpacity>
 
@@ -601,15 +571,15 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
 
               {/* Bottom Controls */}
               <View className="absolute bottom-0 left-0 right-0 p-4 pb-8" style={{ zIndex: 10 }}>
-                {/* Progress Bar */}
+                {/* Progress Bar - Fixed Layout */}
                 <View className="flex-row items-center mb-6" style={{ paddingHorizontal: 8 }}>
                   <Text className="text-white text-base font-medium" style={{ minWidth: 60, textAlign: 'center' }}>
                     {formatTime(isSeeking ? seekTime : currentTime)}
                   </Text>
                   
-                  <View className="flex-1 mx-4">
+                  <View className="flex-1 mx-4" style={{ height: 60, justifyContent: 'center' }}>
                     <Slider
-                      style={{ height: 60, width: '100%' }}
+                      style={{ width: '100%' }}
                       minimumValue={0}
                       maximumValue={duration}
                       value={isSeeking ? seekTime : currentTime}
@@ -618,24 +588,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
                       onSlidingComplete={handleSliderComplete}
                       minimumTrackTintColor="#DC2626"
                       maximumTrackTintColor="rgba(255,255,255,0.3)"
-                      thumbStyle={{
-                        backgroundColor: '#DC2626',
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.3,
-                        shadowRadius: 4,
-                      }}
-                      trackStyle={{ 
-                        height: 6, 
-                        borderRadius: 3,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 1 },
-                        shadowOpacity: 0.2,
-                        shadowRadius: 2,
-                      }}
+                      thumbTintColor="#DC2626"
                     />
                   </View>
                   
@@ -653,7 +606,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
                       activeOpacity={0.7}
                     >
                       <Ionicons
-                        name={player.playing ? "pause" : "play"}
+                        name={isPlaying ? "pause" : "play"}
                         size={32}
                         color="#fff"
                       />
@@ -721,8 +674,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
                         onValueChange={setVolumeControl}
                         minimumTrackTintColor="#DC2626"
                         maximumTrackTintColor="#555"
-                        thumbStyle={{ backgroundColor: '#DC2626', width: 22, height: 22 }}
-                        trackStyle={{ height: 5, borderRadius: 3 }}
+                        thumbTintColor="#DC2626"
                       />
                       <Ionicons name="volume-high" size={24} color="#ccc" />
                     </View>
@@ -857,4 +809,4 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
   );
 };
 
-export default ExpoVideoPlayer;
+export default WorkingVideoPlayer;

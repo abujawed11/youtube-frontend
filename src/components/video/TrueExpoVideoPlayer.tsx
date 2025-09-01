@@ -8,19 +8,8 @@ import {
   ScrollView,
   StatusBar,
   Platform,
-  Alert,
 } from 'react-native';
-// Try to import Expo Video, fallback if not available
-let VideoView: any, useVideoPlayer: any, VideoSource: any;
-try {
-  const expoVideo = require('expo-video');
-  VideoView = expoVideo.VideoView;
-  useVideoPlayer = expoVideo.useVideoPlayer;
-  VideoSource = expoVideo.VideoSource;
-} catch (error) {
-  console.warn('Expo Video not available:', error);
-  // Will be handled in component
-}
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import LinearGradient from 'react-native-linear-gradient';
@@ -38,26 +27,23 @@ interface VideoQuality {
   uri: string;
   label: string;
   resolution: string;
-  bitrate?: number;
 }
 
-interface ExpoVideoPlayerProps {
+interface TrueExpoVideoPlayerProps {
   sources: VideoQuality[];
   title?: string;
   onFullscreenUpdate?: (status: boolean) => void;
   onProgress?: (currentTime: number, totalTime: number) => void;
-  poster?: string;
 }
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
 
-const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
+const TrueExpoVideoPlayer: React.FC<TrueExpoVideoPlayerProps> = ({
   sources,
   title,
   onFullscreenUpdate,
   onProgress: onProgressCallback,
-  poster,
 }) => {
   // Keep screen awake during playback
   useKeepAwake();
@@ -99,24 +85,6 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
   const currentSource = useMemo(() => {
     return sources[selectedQualityIndex] || sources[0];
   }, [sources, selectedQualityIndex]);
-
-  // Check if Expo Video is available
-  if (!VideoView || !useVideoPlayer) {
-    return (
-      <View className="bg-black justify-center items-center" style={{ 
-        width: SCREEN_WIDTH, 
-        height: isFullscreen ? SCREEN_HEIGHT : SCREEN_WIDTH * (9/16) 
-      }}>
-        <Ionicons name="alert-circle" size={48} color="#FF6B6B" />
-        <Text className="text-white text-center mt-4 px-6 text-base">
-          Expo Video not available. Please restart your app or rebuild the project.
-        </Text>
-        <Text className="text-gray-400 text-center mt-2 px-6 text-sm">
-          Try running: npx expo prebuild --clean
-        </Text>
-      </View>
-    );
-  }
 
   // Expo Video player setup
   const videoSource = useMemo(() => ({
@@ -380,6 +348,15 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     showControlsAnimated();
   }, [player, showControlsAnimated]);
 
+  // Simple tap handler
+  const handleTap = useCallback(() => {
+    if (showControls) {
+      hideControlsAnimated();
+    } else {
+      showControlsAnimated();
+    }
+  }, [showControls, hideControlsAnimated, showControlsAnimated]);
+
   // Format time helper
   const formatTime = useCallback((seconds: number) => {
     if (!isFinite(seconds)) return '0:00';
@@ -392,15 +369,6 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
     }
     return `${m}:${s.toString().padStart(2, '0')}`;
   }, []);
-
-  // Simple tap handler
-  const handleTap = useCallback(() => {
-    if (showControls) {
-      hideControlsAnimated();
-    } else {
-      showControlsAnimated();
-    }
-  }, [showControls, hideControlsAnimated, showControlsAnimated]);
 
   // Animated styles
   const controlsAnimatedStyle = useAnimatedStyle(() => ({
@@ -505,7 +473,7 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
               {isLoading ? 'Loading video...' : 'Buffering...'}
             </Text>
             <Text className="text-gray-300 mt-2 text-base">
-              {currentSource.label} • {networkType}
+              {currentSource.label} • {networkType} • EXPO-VIDEO
             </Text>
           </View>
         </Animated.View>
@@ -535,10 +503,10 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1 mr-4">
                     <Text className="text-white text-xl font-bold" numberOfLines={1}>
-                      {title || 'Video Player'}
+                      {title || 'EXPO VIDEO Player'}
                     </Text>
                     <Text className="text-gray-300 text-sm mt-1">
-                      {currentSource.label} • {playbackSpeed}x • {networkType}
+                      {currentSource.label} • {playbackSpeed}x • {networkType} • TRUE EXPO-VIDEO
                     </Text>
                   </View>
                   
@@ -857,4 +825,4 @@ const ExpoVideoPlayer: React.FC<ExpoVideoPlayerProps> = ({
   );
 };
 
-export default ExpoVideoPlayer;
+export default TrueExpoVideoPlayer;

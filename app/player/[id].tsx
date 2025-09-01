@@ -5,12 +5,12 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../../src/contexts/AppContext';
 import { useYouTube } from '../../src/hooks/useYouTube';
-import ExpoVideoPlayer from '../../src/components/video/ExpoVideoPlayer';
+import WorkingVideoPlayer from '../../src/components/video/WorkingVideoPlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 import ErrorMessage from '../../src/components/common/ErrorMessage';
 
-export default function PlayerScreen() {
+function PlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { currentVideo, setCurrentVideo, error, setError } = useAppContext();
   const { getVideoDetails } = useYouTube();
@@ -172,7 +172,7 @@ export default function PlayerScreen() {
       )}
 
       <ScrollView className="flex-1" bounces={false}>
-        <ExpoVideoPlayer
+        <WorkingVideoPlayer
           sources={currentVideo.formats.map((format, index) => ({
             uri: format.url,
             label: format.quality,
@@ -245,3 +245,5 @@ export default function PlayerScreen() {
     </SafeAreaView>
   );
 }
+
+export default PlayerScreen;
