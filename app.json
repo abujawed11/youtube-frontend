@@ -8,7 +8,9 @@
     "scheme": "youtubefrontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": { "supportsTablet": true },
+    "ios": {
+      "supportsTablet": true
+    },
     "android": {
       "package": "com.abujawed11.youtubeplayer",
       "adaptiveIcon": {
@@ -17,16 +19,33 @@
       },
       "edgeToEdgeEnabled": true
     },
-    "web": { "bundler": "metro", "output": "static", "favicon": "./assets/images/favicon.png" },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
     "plugins": [
       "expo-router",
       "expo-dev-client",
-      ["expo-splash-screen", { "image": "./assets/images/splash-icon.png", "imageWidth": 200, "resizeMode": "contain", "backgroundColor": "#ffffff" }]
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-video"
     ],
-    "experiments": { "typedRoutes": true },
+    "experiments": {
+      "typedRoutes": true
+    },
     "extra": {
       "router": {},
-      "eas": { "projectId": "f5105509-9838-4a6a-97b2-8ca28d1d4722" }
+      "eas": {
+        "projectId": "f5105509-9838-4a6a-97b2-8ca28d1d4722"
+      }
     },
     "owner": "abujawed11"
   }

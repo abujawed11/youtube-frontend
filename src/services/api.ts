@@ -2,7 +2,7 @@ import axios, { AxiosResponse } from 'axios';
 import { VideoItem, VideoDetails, SearchResponse, ApiResponse } from '../types';
 
 const API_BASE_URL = __DEV__ 
-  ? 'http://10.20.2.78:3001/api/youtube' 
+  ? 'http://192.168.1.101:3001/api/youtube' 
   : 'https://your-production-api.com/api/youtube';
 
 const apiClient = axios.create({

@@ -5,7 +5,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../../src/contexts/AppContext';
 import { useYouTube } from '../../src/hooks/useYouTube';
-import AdvancedVideoPlayer from '../../src/components/video/AdvancedVideoPlayer';
+import ExpoVideoPlayer from '../../src/components/video/ExpoVideoPlayer';
 import { useAuth } from '../../src/contexts/AuthContext';
 import LoadingSpinner from '../../src/components/common/LoadingSpinner';
 import ErrorMessage from '../../src/components/common/ErrorMessage';
@@ -28,10 +28,10 @@ export default function PlayerScreen() {
 
   const loadVideoDetails = async () => {
     if (!id) return;
-    
+
     setIsLoading(true);
     setError(null);
-    
+
     const videoDetails = await getVideoDetails(id);
     if (videoDetails) {
       setCurrentVideo(videoDetails);
@@ -48,14 +48,17 @@ export default function PlayerScreen() {
     loadVideoDetails();
   };
 
-  const handleVideoProgress = async (currentTime: number, totalTime: number) => {
+  const handleVideoProgress = async (currentSec: number, totalSec: number) => {
     // Add to history when user has watched at least 30 seconds or 10% of the video
-    const watchedSeconds = Math.floor(currentTime / 1000);
-    const totalSeconds = Math.floor(totalTime / 1000);
+    // const watchedSeconds = Math.floor(currentTime / 1000);
+    // const totalSeconds = Math.floor(totalTime / 1000);
+    const watchedSeconds = Math.floor(currentSec);
+    const totalSeconds = Math.floor(totalSec);
     const watchedPercentage = totalSeconds > 0 ? (watchedSeconds / totalSeconds) * 100 : 0;
+    // const watchedPercentage = totalSeconds > 0 ? (watchedSeconds / totalSeconds) * 100 : 0;
 
-    if (!hasAddedToHistory && isAuthenticated && currentVideo && 
-        (watchedSeconds >= 30 || watchedPercentage >= 10)) {
+    if (!hasAddedToHistory && isAuthenticated && currentVideo &&
+      (watchedSeconds >= 30 || watchedPercentage >= 10)) {
       try {
         await addToHistory({
           id: currentVideo.id,
@@ -93,8 +96,8 @@ export default function PlayerScreen() {
           </TouchableOpacity>
           <Text className="text-white text-lg font-semibold">Video Player</Text>
         </View>
-        <ErrorMessage 
-          message={error || 'Video not found'} 
+        <ErrorMessage
+          message={error || 'Video not found'}
           onRetry={error ? handleRetry : undefined}
           showRetry={!!error}
         />
@@ -125,8 +128,8 @@ export default function PlayerScreen() {
               Video temporarily unavailable
             </Text>
           </View>
-          <ErrorMessage 
-            message="Video streams are temporarily unavailable. This may be due to YouTube restrictions or the video being region-locked. Please try a different video or try again later." 
+          <ErrorMessage
+            message="Video streams are temporarily unavailable. This may be due to YouTube restrictions or the video being region-locked. Please try a different video or try again later."
             onRetry={handleRetry}
           />
         </View>
@@ -144,8 +147,8 @@ export default function PlayerScreen() {
           </TouchableOpacity>
           <Text className="text-white text-lg font-semibold">Video Player</Text>
         </View>
-        <ErrorMessage 
-          message="Selected video quality is not available" 
+        <ErrorMessage
+          message="Selected video quality is not available"
           onRetry={() => setSelectedFormat(0)}
           showRetry={true}
         />
@@ -156,7 +159,7 @@ export default function PlayerScreen() {
   return (
     <SafeAreaView className="flex-1 bg-black" edges={isFullscreen ? [] : ['top']}>
       <StatusBar barStyle="light-content" hidden={isFullscreen} />
-      
+
       {!isFullscreen && (
         <View className="flex-row items-center p-4 bg-black">
           <TouchableOpacity onPress={handleBack} className="mr-3">
@@ -169,8 +172,12 @@ export default function PlayerScreen() {
       )}
 
       <ScrollView className="flex-1" bounces={false}>
-        <AdvancedVideoPlayer
-          uri={videoUri}
+        <ExpoVideoPlayer
+          sources={currentVideo.formats.map((format, index) => ({
+            uri: format.url,
+            label: format.quality,
+            resolution: format.quality.includes('p') ? format.quality : `${format.quality} Quality`,
+          }))}
           title={!isFullscreen ? currentVideo.title : undefined}
           onFullscreenUpdate={setIsFullscreen}
           onProgress={handleVideoProgress}
@@ -203,15 +210,13 @@ export default function PlayerScreen() {
                     <TouchableOpacity
                       key={index}
                       onPress={() => setSelectedFormat(index)}
-                      className={`flex-row items-center justify-between p-3 rounded-lg border ${
-                        selectedFormat === index 
-                          ? 'border-red-500 bg-red-50' 
+                      className={`flex-row items-center justify-between p-3 rounded-lg border ${selectedFormat === index
+                          ? 'border-red-500 bg-red-50'
                           : 'border-gray-200'
-                      }`}
+                        }`}
                     >
-                      <Text className={`font-medium ${
-                        selectedFormat === index ? 'text-red-600' : 'text-gray-700'
-                      }`}>
+                      <Text className={`font-medium ${selectedFormat === index ? 'text-red-600' : 'text-gray-700'
+                        }`}>
                         {format.quality}
                       </Text>
                       {selectedFormat === index && (
