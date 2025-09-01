@@ -17,7 +17,7 @@ import VideoPlayer from 'react-native-video-controls';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import LinearGradient from 'react-native-linear-gradient';
-import Orientation from 'react-native-orientation-locker';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import KeepAwake from 'react-native-keep-awake';
 import NetInfo from '@react-native-community/netinfo';
 import DeviceInfo from 'react-native-device-info';
@@ -201,10 +201,10 @@ const AdvancedVideoPlayer: React.FC<AdvancedVideoPlayerProps> = ({
     const newFullscreenState = !playerState.isFullscreen;
     
     if (newFullscreenState) {
-      Orientation.lockToLandscape();
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
       StatusBar.setHidden(true, 'fade');
     } else {
-      Orientation.lockToPortrait();
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
       StatusBar.setHidden(false, 'fade');
     }
     
